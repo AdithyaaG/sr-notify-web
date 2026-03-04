@@ -213,6 +213,15 @@ window.showNoticePopup = async function(id) {
     } catch(e) { console.error("View record failed", e); }
 };
 
+// --- 6. SYNC ONESIGNAL TAGS ---
+if (window.OneSignalDeferred) {
+    OneSignalDeferred.push(async function(OneSignal) {
+        if (myDept) {
+            await OneSignal.User.addTag("dept_code", myDept);
+            console.log("OneSignal: Tagged with Dept", myDept);
+        }
+    });
+}
 
 
 startFeed();
