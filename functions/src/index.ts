@@ -1,15 +1,15 @@
-import * as functions from "firebase-functions/v1";
+import * as functions from "firebase-functions/v1"; // Must use /v1 for this syntax
 import * as admin from "firebase-admin";
 import axios from "axios";
 
 admin.initializeApp();
 
+// Adding types (snapshot: any, context: any) fixes the red errors in your screenshot
 export const sendNoticeNotification = functions.firestore
     .document("notices/{noticeId}")
-    .onCreate(async (snapshot, context) => {
+    .onCreate(async (snapshot: any, context: any) => {
         const noticeData = snapshot.data();
         if (!noticeData) return;
-
         // --- REPLACE THESE WITH YOUR ACTUAL KEYS FROM ONESIGNAL ---
         const ONESIGNAL_APP_ID = "YOUR_ONESIGNAL_APP_ID"; 
         const ONESIGNAL_REST_API_KEY = "YOUR_REST_API_KEY";

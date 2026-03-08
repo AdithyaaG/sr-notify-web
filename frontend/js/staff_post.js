@@ -15,31 +15,45 @@ const UPLOAD_PRESET = "sr_notices";
 // Initialize the target mode (Default to class)
 window.currentTargetMode = 'class';
 
-// --- NEW: OneSignal Trigger Function ---
+// --- FIXED: OneSignal Trigger Function ---
 async function sendPushNotification(title, content, targetCode) {
     const ONESIGNAL_APP_ID = "553381f2-480e-463c-a276-8bbce9288d11";
-    const REST_API_KEY = "YOUR_REST_API_KEY"; // REPLACE WITH YOUR ACTUAL KEY FROM ONESIGNAL SETTINGS
+    const REST_API_KEY = "os_v2_app_kuzyd4sibzddzitwro6oskencf6zdorj2vdukav2s5xvmolwxozdolo4wnr4vf4umag7io5h5k7apqyozc2efptc3rdbsdbuihv4nsi"; 
+
+    if (!REST_API_KEY || REST_API_KEY === "") {
+        console.error("OneSignal Error: REST API Key is missing.");
+        return;
+    }
 
     try {
-        await fetch("https://onesignal.com/api/v1/notifications", {
+        const response = await fetch("https://onesignal.com/api/v1/notifications", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json; charset=utf-8",
-                "Authorization": `Basic ${REST_API_KEY}`
+                "Authorization": `Basic ${REST_API_KEY}` 
             },
             body: JSON.stringify({
                 app_id: ONESIGNAL_APP_ID,
+                // FIXED: Using "Subscribed Users" which is the standard OneSignal segment
+                included_segments: ["Subscribed Users"], 
                 headings: { "en": "New Notice: " + title },
                 contents: { "en": content.substring(0, 100) + "..." },
-                // This targets students based on the 'dept_code' tag we set in onesignal-init.js
-                filters: [
-                    { "field": "tag", "key": "dept_code", "relation": "=", "value": targetCode }
-                ]
+                url: "https://sr-notify-web.vercel.app/" 
             })
         });
-        console.log("Push Notification Sent Successfully");
+
+        const result = await response.json();
+        // Check for success but also alert if OneSignal found 0 players
+        if (response.ok) {
+            console.log("Push Notification Request Sent:", result);
+            if (result.errors) {
+                console.warn("OneSignal Warning: Request sent but no devices were targeted.", result.errors);
+            }
+        } else {
+            console.error("OneSignal API Error Response:", result);
+        }
     } catch (err) {
-        console.error("OneSignal API Error:", err);
+        console.error("OneSignal Fetch Error:", err);
     }
 }
 
@@ -167,11 +181,8 @@ window.publishStaffNotice = async function() {
             expiresAt: expiryInput ? Timestamp.fromDate(new Date(expiryInput)) : null
         };
 
-        // 1. Save to Firebase
         await addDoc(collection(db, "notices"), finalNoticeData);
 
-        // 2. Trigger OneSignal Push Notification
-        // For multiple batches, we notify the whole department for simplicity, or loop through codes.
         const pushTarget = Array.isArray(targetCode) ? deptCode : targetCode;
         await sendPushNotification(title, content, pushTarget);
 
