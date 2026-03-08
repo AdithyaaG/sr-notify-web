@@ -15,6 +15,34 @@ const UPLOAD_PRESET = "sr_notices";
 // Initialize the target mode (Default to class)
 window.currentTargetMode = 'class';
 
+// --- NEW: OneSignal Trigger Function ---
+async function sendPushNotification(title, content, targetCode) {
+    const ONESIGNAL_APP_ID = "553381f2-480e-463c-a276-8bbce9288d11";
+    const REST_API_KEY = "YOUR_REST_API_KEY"; // REPLACE WITH YOUR ACTUAL KEY FROM ONESIGNAL SETTINGS
+
+    try {
+        await fetch("https://onesignal.com/api/v1/notifications", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json; charset=utf-8",
+                "Authorization": `Basic ${REST_API_KEY}`
+            },
+            body: JSON.stringify({
+                app_id: ONESIGNAL_APP_ID,
+                headings: { "en": "New Notice: " + title },
+                contents: { "en": content.substring(0, 100) + "..." },
+                // This targets students based on the 'dept_code' tag we set in onesignal-init.js
+                filters: [
+                    { "field": "tag", "key": "dept_code", "relation": "=", "value": targetCode }
+                ]
+            })
+        });
+        console.log("Push Notification Sent Successfully");
+    } catch (err) {
+        console.error("OneSignal API Error:", err);
+    }
+}
+
 async function uploadToCloudinary(file) {
     const formData = new FormData();
     formData.append('file', file);
@@ -76,20 +104,17 @@ window.publishStaffNotice = async function() {
     const currentUser = auth.currentUser;
     if (!currentUser) { alert("Session expired. Please log in again."); return; }
 
-    // INITIALIZE TARGET LOGIC
-    let targetCode = deptCode; // Default to 107
+    let targetCode = deptCode; 
     let audienceType = window.currentTargetMode; 
     let startReg = null;
     let endReg = null;
 
-    // --- LOGIC SWITCH BASED ON BUTTON SELECTED ---
     if (audienceType === 'class') {
-        // Find the batch controlled by this staff
         const batchQuery = query(collection(db, "batches"), where("controller_email", "==", currentUser.email));
         const batchSnap = await getDocs(batchQuery);
         if (!batchSnap.empty) {
             const bData = batchSnap.docs[0].data();
-            targetCode = batchSnap.docs[0].id; // e.g., "107_23_Batch"
+            targetCode = batchSnap.docs[0].id; 
             startReg = Number(bData.start_reg);
             endReg = Number(bData.end_reg);
             audienceType = 'class';
@@ -101,8 +126,8 @@ window.publishStaffNotice = async function() {
     } 
     else if (audienceType === 'dept' || audienceType === 'department') {
         audienceType = 'department'; 
-        targetCode = deptCode; // Use "107"
-        startReg = null; // Clear these so it doesn't show in class feed
+        targetCode = deptCode;
+        startReg = null;
         endReg = null;
     } 
     else if (audienceType === 'choose') {
@@ -142,11 +167,15 @@ window.publishStaffNotice = async function() {
             expiresAt: expiryInput ? Timestamp.fromDate(new Date(expiryInput)) : null
         };
 
-        console.log("Posting Notice Data:", finalNoticeData); // Debugging
-
+        // 1. Save to Firebase
         await addDoc(collection(db, "notices"), finalNoticeData);
 
-        alert("Notice published successfully!");
+        // 2. Trigger OneSignal Push Notification
+        // For multiple batches, we notify the whole department for simplicity, or loop through codes.
+        const pushTarget = Array.isArray(targetCode) ? deptCode : targetCode;
+        await sendPushNotification(title, content, pushTarget);
+
+        alert("Notice published successfully and students notified!");
         window.location.href = "staff_home.html"; 
     } catch (error) {
         console.error("Post Error:", error);

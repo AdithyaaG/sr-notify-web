@@ -102,7 +102,7 @@
 
 <script type="module">
     import { db } from '../../js/firebase-config.js';
-    import { collection, query, where, orderBy, onSnapshot, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { collection, query, where, orderBy, onSnapshot, doc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     const container = document.getElementById('admin-notice-container');
     const studentId = localStorage.getItem("userReg") || "Guest";
@@ -110,18 +110,14 @@
     window.allAdminNotices = {};
     let activeIntervals = {};
 
-    // Helper function for WhatsApp-style timestamps
     function formatWhatsAppTime(date) {
         if (!date) return "Just now";
         const now = new Date();
         const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-        
         const options = { hour: 'numeric', minute: '2-digit', hour12: true };
         const timeStr = date.toLocaleTimeString([], options);
-
         if (diffDays === 0) return `Today, ${timeStr}`;
         if (diffDays === 1) return `Yesterday, ${timeStr}`;
-        
         return `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${timeStr}`;
     }
 
@@ -131,7 +127,7 @@
         orderBy("createdAt", "desc")
     );
 
-    onSnapshot(q, (snapshot) => {
+    onSnapshot(q, async (snapshot) => {
         Object.values(activeIntervals).forEach(clearInterval);
         activeIntervals = {};
         
@@ -145,57 +141,55 @@
         const twoDaysFromNow = new Date();
         twoDaysFromNow.setDate(now.getDate() + 2);
 
-        let pinnedNotices = [];
-        let regularNotices = [];
+        let noticesWithStatus = [];
 
-        snapshot.forEach(docSnap => {
+        // Loop through docs to check Read/Unread status
+        for (const docSnap of snapshot.docs) {
             const data = docSnap.data();
             const id = docSnap.id;
             window.allAdminNotices[id] = data;
 
             const expiryDate = data.expiresAt?.toDate ? data.expiresAt.toDate() : (data.expiresAt ? new Date(data.expiresAt) : null);
-            if (expiryDate && expiryDate <= now) return;
+            if (expiryDate && expiryDate <= now) continue;
+
+            // --- READ/UNREAD CHECK ---
+            let isRead = false;
+            try {
+                const viewSnap = await getDoc(doc(db, "notices", id, "views", studentId));
+                if (viewSnap.exists()) isRead = true;
+            } catch (e) { console.error("Read check error:", e); }
 
             let isPinned = false;
             if (data.event_date) {
                 const eventDate = new Date(data.event_date);
-                if (eventDate <= twoDaysFromNow && eventDate >= now.setHours(0,0,0,0)) {
+                if (eventDate <= twoDaysFromNow && eventDate >= new Date().setHours(0,0,0,0)) {
                     isPinned = true;
                 }
             }
 
-            const cardHtml = generateAdminCard(id, data, expiryDate, isPinned);
-            
-            // Get raw date for sorting/grouping later
             const postDate = data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date());
             
-            const noticeObj = { html: cardHtml, id, expiryDate, date: postDate };
-            
-            if (isPinned) pinnedNotices.push(noticeObj);
-            else regularNotices.push(noticeObj);
-        });
+            noticesWithStatus.push({ 
+                html: generateAdminCard(id, data, expiryDate, isPinned, isRead), 
+                id, 
+                expiryDate, 
+                date: postDate 
+            });
+        }
 
-        // --- DATE SEPARATION LOGIC ---
         let lastProcessedDateString = "";
-        const combinedNotices = [...pinnedNotices, ...regularNotices];
-
-        combinedNotices.forEach(item => {
-            // Format: "03-03-26 Tuesday"
+        noticesWithStatus.forEach(item => {
             const currentNoticeDateString = item.date.toLocaleDateString('en-GB', { 
-                day: '2-digit', 
-                month: '2-digit', 
-                year: '2-digit' 
+                day: '2-digit', month: '2-digit', year: '2-digit' 
             }).replace(/\//g, '-') + " " + item.date.toLocaleDateString('en-US', { weekday: 'long' });
 
-            // Inject line if date changes
             if (currentNoticeDateString !== lastProcessedDateString) {
-                const dateLineHtml = `
+                container.innerHTML += `
                     <div style="width: 100%; border-top: 2px solid #333; margin: 30px 0 15px; position: relative; clear: both;">
-                        <span style="position: absolute; top: -14px; left: 10px; background: #f0f2f5; padding: 0 12px; font-weight: 800; color: #333; font-size: 0.9rem; font-family: sans-serif; letter-spacing: 0.5px;">
+                        <span style="position: absolute; top: -14px; left: 10px; background: #f0f2f5; padding: 0 12px; font-weight: 800; color: #333; font-size: 0.9rem; font-family: sans-serif;">
                             ${currentNoticeDateString}
                         </span>
                     </div>`;
-                container.innerHTML += dateLineHtml;
                 lastProcessedDateString = currentNoticeDateString;
             }
 
@@ -204,26 +198,28 @@
         });
     });
 
-    function generateAdminCard(id, data, expiryDate, isPinned) {
+    function generateAdminCard(id, data, expiryDate, isPinned, isRead) {
         const adminRed = "#d32f2f";
         const pinOrange = "#ff9800";
-        
-        // Use the WhatsApp formatter
         const postDate = data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : null);
         const timeSnap = formatWhatsAppTime(postDate);
 
+        // Visual Logic for Read vs Unread
+        const cardBg = isRead ? "white" : "#f0f2f5"; 
+        const cardOpacity = isRead ? "1" : "0.5";
+        const unreadBadge = isRead ? '' : `<div style="position:absolute; top:10px; right:10px; width:8px; height:8px; background:${adminRed}; border-radius:50%;"></div>`;
+
         let attachmentIcon = "";
         if (data.attachments && data.attachments.length > 0) {
-            attachmentIcon = `<i class="fas fa-images" style="margin-left:8px; color:${pinOrange};"></i> <span style="font-size:0.7rem; color:#aaa;">${data.attachments.length}</span>`;
-        } else if (data.attachmentUrl) {
-            attachmentIcon = `<i class="fas fa-paperclip" style="margin-left:8px; color:${adminRed}; opacity:0.7;"></i>`;
+            attachmentIcon = `<i class="fas fa-images" style="margin-left:8px; color:${pinOrange};"></i>`;
         }
 
         return `
             <div class="notice-card" id="admin-card-${id}" onclick="showAdminPopup('${id}')" 
-                 style="border-left-color: ${isPinned ? pinOrange : adminRed}; 
-                 box-shadow: ${isPinned ? '0 4px 15px rgba(255,152,0,0.2)' : '0 4px 12px rgba(0,0,0,0.08)'};">
+                 style="background:${cardBg}; opacity:${cardOpacity}; border-left-color: ${isPinned ? pinOrange : adminRed}; 
+                 box-shadow: ${isPinned ? '0 4px 15px rgba(255,152,0,0.2)' : '0 4px 12px rgba(0,0,0,0.08)'}; position:relative; transition: all 0.3s ease;">
                 
+                ${unreadBadge}
                 ${isPinned ? `<div class="pinned-badge"><i class="fas fa-thumbtack"></i> UPCOMING EVENT</div>` : ''}
 
                 <div class="card-header-row">
@@ -231,12 +227,6 @@
                         <i class="fas ${isPinned ? 'fa-calendar-star' : 'fa-shield-alt'}"></i> ${data.title} ${attachmentIcon}
                     </div>
                 </div>
-
-                ${data.event_date ? `
-                    <div style="font-size:0.8rem; color:#e65100; font-weight:bold; margin-bottom:8px;">
-                        <i class="fas fa-calendar-alt"></i> Event Date: ${new Date(data.event_date).toLocaleDateString()}
-                    </div>
-                ` : ''}
 
                 <div class="card-excerpt">${data.content}</div>
 
@@ -273,44 +263,32 @@
         
         recordView(id);
 
+        // Immediate UI feedback
+        const card = document.getElementById(`admin-card-${id}`);
+        if (card) {
+            card.style.background = "white";
+            card.style.opacity = "1";
+            const badge = card.querySelector('div[style*="border-radius:50%"]');
+            if (badge) badge.remove();
+        }
+
         const overlay = document.createElement('div');
         overlay.id = "notice-overlay";
         overlay.className = "popup-overlay";
-        
         const linkedContent = notice.content.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:#d32f2f; font-weight:bold; text-decoration:underline;">$1</a>');
 
         let mediaHtml = "";
         const items = notice.attachments || [];
-        if (items.length === 0 && notice.attachmentUrl) {
-            items.push({ url: notice.attachmentUrl, type: notice.attachmentType });
-        }
+        if (items.length === 0 && notice.attachmentUrl) items.push({ url: notice.attachmentUrl, type: notice.attachmentType });
 
         if (items.length > 0) {
-            mediaHtml = `
-                <div style="margin-top:20px;">
-                    <div class="slider-container">
-                        ${items.map((item, idx) => {
-                            if (item.type === 'image') {
-                                return `
-                                <div class="slider-item">
-                                    <a href="${item.url}" target="_blank"><img src="${item.url}"></a>
-                                    <div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.6); color:white; font-size:10px; padding:2px 8px; border-radius:10px;">${idx+1}/${items.length}</div>
-                                </div>`;
-                            } else if (item.type === 'video') {
-                                return `<div class="slider-item"><video controls><source src="${item.url}"></video></div>`;
-                            } else {
-                                return `
-                                <div class="slider-item">
-                                    <a href="${item.url}" target="_blank" style="display:flex; align-items:center; gap:10px; background:#fff5f5; height:300px; justify-content:center; flex-direction:column; border-radius:15px; text-decoration:none; border:1px solid #ffcdd2;">
-                                        <i class="fas fa-file-pdf" style="font-size:3rem; color:#d32f2f;"></i>
-                                        <span style="color:#d32f2f; font-weight:bold;">View Document</span>
-                                    </a>
-                                </div>`;
-                            }
-                        }).join('')}
-                    </div>
-                    ${items.length > 1 ? `<p style="text-align:center; color:#999; font-size:0.7rem; margin-top:8px;"><i class="fas fa-arrows-left-right"></i> Swipe for more</p>` : ''}
-                </div>`;
+            mediaHtml = `<div style="margin-top:20px;"><div class="slider-container">
+                ${items.map((item, idx) => {
+                    if (item.type === 'image') return `<div class="slider-item"><a href="${item.url}" target="_blank"><img src="${item.url}"></a></div>`;
+                    if (item.type === 'video') return `<div class="slider-item"><video controls><source src="${item.url}"></video></div>`;
+                    return `<div class="slider-item"><a href="${item.url}" target="_blank" class="doc-link"><i class="fas fa-file-pdf"></i> View Document</a></div>`;
+                }).join('')}
+            </div></div>`;
         }
 
         overlay.innerHTML = `
@@ -320,12 +298,8 @@
                     <button onclick="document.getElementById('notice-overlay').remove()" class="close-btn">&times;</button>
                 </div>
                 <div class="popup-body">
-                    ${notice.event_date ? `<div style="background:#fff3e0; color:#e65100; padding:10px; border-radius:10px; margin-bottom:15px; font-weight:bold; font-size:0.9rem; border-left:4px solid #ff9800;"><i class="fas fa-calendar-star"></i> Event: ${new Date(notice.event_date).toLocaleDateString()}</div>` : ''}
                     <div class="content-text">${linkedContent}</div>
                     ${mediaHtml}
-                </div>
-                <div class="popup-footer">
-                    <i class="fas fa-user-shield"></i> SR-Notify Official Admin Broadcast
                 </div>
             </div>`;
         document.body.appendChild(overlay);
