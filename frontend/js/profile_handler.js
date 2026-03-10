@@ -1,74 +1,78 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Direct fetch with clear fallbacks to prevent "null" text from appearing
-    const role = localStorage.getItem("userRole") || "";
-    const name = localStorage.getItem("userName") || "User";
-    const photo = localStorage.getItem("userPhoto") || "";
-    const dept = localStorage.getItem("userDept") || "";
-    const uid = localStorage.getItem("uid") || "";
-    // Note: Student RegNo is stored as 'userReg' in your login_handler
-    const regNo = localStorage.getItem("userReg") || "";
+    // 1. Fetch data from Local Storage
+    const userData = {
+        name: localStorage.getItem("userName"),
+        role: localStorage.getItem("userRole"),
+        photo: localStorage.getItem("userPhoto"),
+        dept: localStorage.getItem("userDept"),
+        deptName: localStorage.getItem("deptName"), // Fixed: Added missing comma
+        regNo: localStorage.getItem("userReg") || localStorage.getItem("regNo"),
+        uid: localStorage.getItem("uid")
+    };
 
-    // 2. Select Elements with high compatibility for Admin/Staff/Student HTML
-    const nameDisp = document.getElementById('disp-name');
-    const roleDisp = document.getElementById('disp-role');
-    const deptDisp = document.getElementById('disp-dept');
-    const idDisp = document.getElementById('disp-id');
-    const badge = document.getElementById('badge-role');
-    
-    // Avatar logic: checks for both specific IDs and general classes
-    const mainAvatar = document.getElementById('profile-pic-container') || 
-                       document.querySelector('.profile-avatar') ||
-                       document.getElementById('profile-container');
+    // 2. Select UI Elements
+    const elements = {
+        name: document.getElementById('disp-name'),
+        role: document.getElementById('disp-role'),
+        deptCode: document.getElementById('disp-dept-code'), // Changed ID
+        deptName: document.getElementById('disp-dept-name'), // New ID
+        id: document.getElementById('disp-id'),
+        badge: document.getElementById('badge-role'),
+        
+        mainAvatar: document.getElementById('profile-pic-container') || document.querySelector('.profile-avatar'),
+        headerImg: document.getElementById('user-header-img'),
+        headerIcon: document.getElementById('user-header-icon')
+    };
 
-    // 3. Update Text Content
-    if (nameDisp) nameDisp.textContent = name;
-    if (badge) badge.textContent = role.toUpperCase();
+    // 3. Populate Universal Text Details
+    if (elements.name) elements.name.innerText = userData.name || "User";
+    if (elements.badge) elements.badge.innerText = userData.role ? userData.role.toUpperCase() : "USER";
     
-    if (roleDisp) {
-        roleDisp.textContent = role.charAt(0).toUpperCase() + role.slice(1) + " Account";
+    if (elements.role) {
+        elements.role.innerText = userData.role ? 
+            userData.role.charAt(0).toUpperCase() + userData.role.slice(1) + " Account" : 
+            "Account";
     }
 
-    // 4. Role-Specific Data Mapping
-    if (role === 'student') {
-        if (idDisp) idDisp.textContent = regNo || "Not Available";
-        if (deptDisp) deptDisp.textContent = dept || "Not Assigned";
-    } else if (role === 'admin') {
-        if (deptDisp) deptDisp.textContent = "All Departments"; // Admins see all
-        if (idDisp) idDisp.textContent = uid || "Administrator";
+    // 4. Role-Specific Logic
+    if (userData.role === 'student') {
+        if (elements.id) elements.id.innerText = userData.regNo || "Not Available";
+        if (elements.deptCode) elements.deptCode.innerText = userData.dept || "---";
+        if (elements.deptName) elements.deptName.innerText = userData.deptName || "Not Assigned";
+    } else if (userData.role === 'admin') {
+        if (elements.deptCode) elements.deptCode.innerText = "All";
+        if (elements.deptName) elements.deptName.innerText = "Administrator Access";
+        if (elements.id) elements.id.innerText = userData.uid || "Admin UID";
     } else {
-        // Staff logic
-        if (deptDisp) deptDisp.textContent = dept || "Not Assigned";
-        if (idDisp) idDisp.textContent = uid || "Not Available";
+        // Staff
+        if (elements.deptCode) elements.deptCode.innerText = userData.dept || "---";
+        if (elements.deptName) elements.deptName.innerText = userData.deptName || "Not Assigned";
+        if (elements.id) elements.id.innerText = userData.uid || "Not Available";
     }
 
-    // 5. Fix Avatar Rendering (for Admin and Staff Header)
-    if (photo && photo !== "null" && photo !== "") {
-        // Update main profile picture
-        if (mainAvatar) {
-            mainAvatar.innerHTML = `<img src="${photo}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
-            const icon = mainAvatar.querySelector('i');
+    // 5. Avatar Rendering
+    if (userData.photo && userData.photo !== "null" && userData.photo !== "") {
+        if (elements.mainAvatar) {
+            elements.mainAvatar.innerHTML = `<img src="${userData.photo}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">`;
+            const icon = elements.mainAvatar.querySelector('.fa-user-circle');
             if (icon) icon.style.display = 'none';
         }
-
-        // Update top-right header icon (if present in staff/admin home)
-        const headerImg = document.getElementById('user-header-img');
-        const headerIcon = document.getElementById('user-header-icon');
-        if (headerImg) {
-            headerImg.src = photo;
-            headerImg.style.display = 'block';
-            if (headerIcon) headerIcon.style.display = 'none';
+        if (elements.headerImg) {
+            elements.headerImg.src = userData.photo;
+            elements.headerImg.style.display = 'block';
+            if (elements.headerIcon) elements.headerIcon.style.display = 'none';
         }
     }
 
-    // 6. Logout Handler
-    const logoutBtn = document.getElementById('logoutBtn') || document.querySelector('.btn-logout');
+    // 6. Logout
+    const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
-        logoutBtn.addEventListener('click', (e) => {
+        logoutBtn.onclick = (e) => {
             e.preventDefault();
-            if (confirm("Do you want to sign out?")) {
+            if (confirm("Are you sure you want to sign out?")) {
                 localStorage.clear();
                 window.location.href = "../../login.html";
             }
-        });
+        };
     }
 });
