@@ -43,7 +43,7 @@ body {
 .admin-header img {
     width: 55px;
     height: 55px;
-    background: white;
+    background: #232985;
     padding: 3px;
     border-radius: 12px;
     object-fit: contain;

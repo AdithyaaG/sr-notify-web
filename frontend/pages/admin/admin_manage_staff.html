@@ -138,189 +138,188 @@
     </div>
 
     <script type="module">
-        import { db } from "../../js/firebase-config.js"; 
-        import { collection, query, where, getDocs, updateDoc, doc, setDoc, deleteDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { db } from "../../js/firebase-config.js"; 
+    import { collection, query, where, getDocs, updateDoc, doc, setDoc, deleteDoc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // CRITICAL FIX: Get dept from URL not localStorage
-        const urlParams = new URLSearchParams(window.location.search);
-        const selectedDept = urlParams.get('dept'); 
+    const urlParams = new URLSearchParams(window.location.search);
+    const selectedDept = urlParams.get('dept'); 
 
-        if(!selectedDept) {
-            alert("No department selected!");
-            window.location.href = "admin_dept_manage.html";
-        }
-        document.getElementById('deptSubtitle').innerText = `Department Code: ${selectedDept}`;
+    if(!selectedDept) {
+        alert("No department selected!");
+        window.location.href = "admin_dept_manage.html";
+    }
+    document.getElementById('deptSubtitle').innerText = `Department Code: ${selectedDept}`;
 
-        async function initBatches() {
-            try {
-                const q = query(collection(db, "batches"), where("dept_code", "==", selectedDept));
-                const snap = await getDocs(q);
-                
-                document.querySelectorAll('.batch-grid').forEach(g => g.innerHTML = "");
-                const overviewBody = document.getElementById('overviewBody');
-                overviewBody.innerHTML = ""; 
-
-                let counter = 1;
-                snap.forEach(docSnap => {
-                    const b = docSnap.data();
-                    const container = document.getElementById(b.category);
-                    if (container) {
-                        createBatchPill(container, b, docSnap.id);
-                        container.style.display = 'grid';
-                    }
-
-                    overviewBody.insertAdjacentHTML('beforeend', `
-                        <tr>
-                            <td>${counter++}</td>
-                            <td><strong>${b.title}</strong></td>
-                            <td style="color: ${b.controller_name ? '#d32f2f' : '#999'}">
-                                ${b.controller_name || 'Vacant'}
-                            </td>
-                        </tr>
-                    `);
-                });
-            } catch (err) { console.error(err); }
-        }
-
-        function createBatchPill(container, data, docId) {
-            const div = document.createElement('div');
-            div.className = 'batch-pill-container';
-            const controller = data.controller_name ? 
-                `<small style="display:block; font-size:10px; color:#d32f2f; margin-top:4px;">${data.controller_name}</small>` : 
-                `<small style="display:block; font-size:10px; color:#999; margin-top:4px;">Vacant</small>`;
-
-            div.innerHTML = `
-                <div class="batch-pill" onclick="openAssign('${data.title}', '${docId}')">
-                    <span>${data.year} Batch</span>
-                    ${controller}
-                </div>
-                <button class="delete-btn" onclick="deleteBatch('${docId}', this)"><i class="fas fa-times"></i></button>
-            `;
-            container.appendChild(div);
-        }
-
-        window.openAssign = async (title, docId) => {
-            window.currentBatchId = docId;
-            document.getElementById('assignTitle').innerText = title;
-            document.getElementById('assignModal').style.display = 'flex';
-            
-            const batchDoc = await getDoc(doc(db, "batches", docId));
-            if (batchDoc.exists()) {
-                const d = batchDoc.data();
-                document.getElementById('staffName').value = d.controller_name || "";
-                document.getElementById('staffEmail').value = d.controller_email || "";
-                document.getElementById('regStart').value = d.start_reg || "";
-                document.getElementById('regEnd').value = d.end_reg || "";
-                window.updateAssignUI(d.controller_email);
-            }
-        };
-
-        window.updateAssignUI = async (email) => {
-            if(!email) return;
-            const status = document.getElementById('staffStatus');
-            const inviteBtn = document.getElementById('btnInvite');
-            
-            const q = query(collection(db, "users"), where("email", "==", email.toLowerCase().trim()));
+    async function initBatches() {
+        try {
+            const q = query(collection(db, "batches"), where("dept_code", "==", selectedDept));
             const snap = await getDocs(q);
+            
+            document.querySelectorAll('.batch-grid').forEach(g => g.innerHTML = "");
+            const overviewBody = document.getElementById('overviewBody');
+            overviewBody.innerHTML = ""; 
 
-            if(!snap.empty) {
-                status.innerText = "Registered Staff";
-                status.className = "status-badge status-assigned";
-                inviteBtn.style.display = "none";
-            } else {
-                status.innerText = "Unregistered (Needs Invite)";
-                status.className = "status-badge status-vacant";
-                inviteBtn.style.display = "block";
-            }
-        };
-
-        window.updateStaffRecord = async () => {
-            const email = document.getElementById('staffEmail').value.trim().toLowerCase();
-            const name = document.getElementById('staffName').value.trim();
-            const start = parseInt(document.getElementById('regStart').value);
-            const end = parseInt(document.getElementById('regEnd').value);
-            const batchTitle = document.getElementById('assignTitle').innerText;
-
-            if(!email || !name || !start || !end) return alert("Please fill all fields!");
-
-            try {
-                // 1. Update Batch Document
-                await updateDoc(doc(db, "batches", window.currentBatchId), {
-                    controller_name: name,
-                    controller_email: email,
-                    start_reg: start,
-                    end_reg: end
-                });
-
-                // 2. Handle User record (Invite system)
-                const q = query(collection(db, "users"), where("email", "==", email));
-                const snap = await getDocs(q);
-
-                if(snap.empty) {
-                    const tempId = `TEMP_${Date.now()}`;
-                    await setDoc(doc(db, "users", tempId), {
-                        email: email,
-                        name: name,
-                        role: "staff",
-                        dept_code: selectedDept,
-                        reg_start: start,
-                        reg_end: end,
-                        isLinked: false,
-                        createdAt: serverTimestamp()
-                    });
+            let counter = 1;
+            snap.forEach(docSnap => {
+                const b = docSnap.data();
+                const container = document.getElementById(b.category);
+                if (container) {
+                    createBatchPill(container, b, docSnap.id);
+                    container.style.display = 'grid';
                 }
 
-                alert("Staff assigned successfully!");
-                closeModals();
-                initBatches();
-            } catch (e) { alert(e.message); }
-        };
+                overviewBody.insertAdjacentHTML('beforeend', `
+                    <tr>
+                        <td>${counter++}</td>
+                        <td><strong>${b.title}</strong></td>
+                        <td style="color: ${b.controller_name ? '#d32f2f' : '#999'}">
+                            ${b.controller_name || 'Vacant'}
+                        </td>
+                    </tr>
+                `);
+            });
+        } catch (err) { console.error(err); }
+    }
 
-        window.addNewBatch = async () => {
-            const year = document.getElementById('newYear').value;
-            const cat = document.getElementById('newCategory').value;
-            if(!year) return;
+    function createBatchPill(container, data, docId) {
+        const div = document.createElement('div');
+        div.className = 'batch-pill-container';
+        const controller = data.controller_name ? 
+            `<small style="display:block; font-size:10px; color:#d32f2f; margin-top:4px;">${data.controller_name}</small>` : 
+            `<small style="display:block; font-size:10px; color:#999; margin-top:4px;">Vacant</small>`;
 
-            const title = `${year} Batch ${cat.toUpperCase()}`;
-            const customId = `${selectedDept}_${title.replace(/\s+/g, '_')}`;
+        div.innerHTML = `
+            <div class="batch-pill" onclick="openAssign('${data.title}', '${docId}')">
+                <span>${data.year} Batch</span>
+                ${controller}
+            </div>
+            <button class="delete-btn" onclick="deleteBatch('${docId}', this)"><i class="fas fa-times"></i></button>
+        `;
+        container.appendChild(div);
+    }
 
-            await setDoc(doc(db, "batches", customId), {
-                title, category: cat, year, dept_code: selectedDept,
+    window.openAssign = async (title, docId) => {
+        window.currentBatchId = docId;
+        document.getElementById('assignTitle').innerText = title;
+        document.getElementById('assignModal').style.display = 'flex';
+        
+        const batchDoc = await getDoc(doc(db, "batches", docId));
+        if (batchDoc.exists()) {
+            const d = batchDoc.data();
+            document.getElementById('staffName').value = d.controller_name || "";
+            document.getElementById('staffEmail').value = d.controller_email || "";
+            document.getElementById('regStart').value = d.start_reg || "";
+            document.getElementById('regEnd').value = d.end_reg || "";
+            window.updateAssignUI(d.controller_email);
+        }
+    };
+
+    // UPDATED: Now checks 'staff' collection instead of 'users'
+    window.updateAssignUI = async (email) => {
+        if(!email) return;
+        const status = document.getElementById('staffStatus');
+        const inviteBtn = document.getElementById('btnInvite');
+        
+        const q = query(collection(db, "staff"), where("email", "==", email.toLowerCase().trim()));
+        const snap = await getDocs(q);
+
+        if(!snap.empty) {
+            status.innerText = "Registered Staff";
+            status.className = "status-badge status-assigned";
+            inviteBtn.style.display = "none";
+        } else {
+            status.innerText = "Unregistered (New Record)";
+            status.className = "status-badge status-vacant";
+            inviteBtn.style.display = "block";
+        }
+    };
+
+    // CRITICAL FIX: Saves to 'staff' collection and updates 'batches'
+    window.updateStaffRecord = async () => {
+        const email = document.getElementById('staffEmail').value.trim().toLowerCase();
+        const name = document.getElementById('staffName').value.trim();
+        const start = parseInt(document.getElementById('regStart').value);
+        const end = parseInt(document.getElementById('regEnd').value);
+
+        if(!email || !name || !start || !end) return alert("Please fill all fields!");
+
+        try {
+            // 1. Update the Batch document so the feed knows who the staff is
+            await updateDoc(doc(db, "batches", window.currentBatchId), {
+                controller_name: name,
+                controller_email: email,
+                start_reg: start,
+                end_reg: end
+            });
+
+            // 2. Create/Update the document in the 'staff' collection
+            // We use the email as the Document ID to prevent duplicates
+            await setDoc(doc(db, "staff", email), {
+                email: email,
+                name: name,
+                role: "staff", // Defaults to staff
+                dept_code: selectedDept,
+                assigned_batch: window.currentBatchId,
+                reg_start: start,
+                reg_end: end,
+                canManageDept: false, // Standard staff cannot manage dept
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+
+            alert("Staff record synchronized in 'staff' collection successfully!");
+            closeModals();
+            initBatches();
+        } catch (e) { 
+            console.error(e);
+            alert("Error: " + e.message); 
+        }
+    };
+
+    window.addNewBatch = async () => {
+        const year = document.getElementById('newYear').value;
+        const cat = document.getElementById('newCategory').value;
+        if(!year) return;
+
+        const title = `${year} Batch ${cat.toUpperCase()}`;
+        const customId = `${selectedDept}_${title.replace(/\s+/g, '_')}`;
+
+        await setDoc(doc(db, "batches", customId), {
+            title, category: cat, year, dept_code: selectedDept,
+            controller_name: "", controller_email: "",
+            start_reg: null, end_reg: null
+        });
+        closeModals();
+        initBatches();
+    };
+
+    window.deleteBatch = async (id, btn) => {
+        if(confirm("Delete batch?")) {
+            await deleteDoc(doc(db, "batches", id));
+            initBatches();
+        }
+    };
+
+    window.clearAssignment = async () => {
+        if(confirm("Clear staff?")) {
+            await updateDoc(doc(db, "batches", window.currentBatchId), {
                 controller_name: "", controller_email: "",
                 start_reg: null, end_reg: null
             });
             closeModals();
             initBatches();
-        };
+        }
+    };
 
-        window.deleteBatch = async (id, btn) => {
-            if(confirm("Delete batch?")) {
-                await deleteDoc(doc(db, "batches", id));
-                initBatches();
-            }
-        };
+    window.toggleBatch = (id) => {
+        const el = document.getElementById(id);
+        el.style.display = (el.style.display === 'grid') ? 'none' : 'grid';
+    };
+    window.closeModals = () => document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    window.openCreateModal = () => document.getElementById('createModal').style.display = 'flex';
+    
+    document.getElementById('staffEmail').addEventListener('blur', (e) => window.updateAssignUI(e.target.value));
 
-        window.clearAssignment = async () => {
-            if(confirm("Clear staff?")) {
-                await updateDoc(doc(db, "batches", window.currentBatchId), {
-                    controller_name: "", controller_email: "",
-                    start_reg: null, end_reg: null
-                });
-                closeModals();
-                initBatches();
-            }
-        };
-
-        window.toggleBatch = (id) => {
-            const el = document.getElementById(id);
-            el.style.display = (el.style.display === 'grid') ? 'none' : 'grid';
-        };
-        window.closeModals = () => document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
-        window.openCreateModal = () => document.getElementById('createModal').style.display = 'flex';
-        
-        document.getElementById('staffEmail').addEventListener('blur', (e) => window.updateAssignUI(e.target.value));
-
-        initBatches();
-    </script>
+    initBatches();
+</script>
 </body>
 </html>

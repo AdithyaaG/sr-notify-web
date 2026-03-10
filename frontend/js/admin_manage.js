@@ -1,5 +1,8 @@
 import { db, auth } from './firebase-config.js';
-import { collection, query, where, orderBy, onSnapshot, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { 
+    collection, query, where, orderBy, onSnapshot, doc, getDoc, 
+    updateDoc, deleteDoc, serverTimestamp, Timestamp 
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const CLOUD_NAME = "dfie8haie"; 
 const UPLOAD_PRESET = "sr_notices"; 
@@ -12,7 +15,10 @@ async function uploadToCloudinary(file) {
     formData.append('file', file);
     formData.append('upload_preset', UPLOAD_PRESET);
     const statusText = document.getElementById('edit-upload-status');
-    if (statusText) { statusText.innerText = "Uploading attachment..."; statusText.style.display = 'block'; }
+    if (statusText) { 
+        statusText.innerText = "Uploading attachment..."; 
+        statusText.style.display = 'block'; 
+    }
 
     try {
         const response = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
@@ -32,10 +38,17 @@ async function uploadToCloudinary(file) {
 // 2. Load Notices (Real-time)
 auth.onAuthStateChanged((user) => {
     if (user) {
-        const q = query(collection(db, "notices"), where("authorRole", "==", "admin"), orderBy("createdAt", "desc"));
+        // Query to get all notices where the author is 'admin'
+        const q = query(
+            collection(db, "notices"), 
+            where("authorRole", "==", "admin"), 
+            orderBy("createdAt", "desc")
+        );
 
         onSnapshot(q, (snapshot) => {
             if (!container) return;
+            
+            // Clear existing timers to prevent memory leaks
             Object.values(activeIntervals).forEach(clearInterval);
             activeIntervals = {};
             container.innerHTML = '';
@@ -49,7 +62,7 @@ auth.onAuthStateChanged((user) => {
                 const data = snapDoc.data();
                 const id = snapDoc.id;
                 
-                // --- COLOR LOGIC ---
+                // --- UI COLOR & STATUS LOGIC ---
                 const isEvent = data.priority?.toLowerCase().includes('event');
                 const accentColor = isEvent ? "#ff9800" : "#d32f2f";
                 
@@ -79,7 +92,9 @@ auth.onAuthStateChanged((user) => {
                 if (expiryDate && !isExpired) startAdminTimer(id, expiryDate);
             });
         });
-    } else { window.location.href = "../../index.html"; }
+    } else { 
+        window.location.href = "../../index.html"; 
+    }
 });
 
 function startAdminTimer(id, expiryDate) {
@@ -87,7 +102,11 @@ function startAdminTimer(id, expiryDate) {
         const timeLeft = expiryDate - new Date();
         const timeText = document.getElementById(`time-text-${id}`);
         if (!timeText) return;
-        if (timeLeft <= 0) { timeText.innerText = "EXPIRED"; clearInterval(activeIntervals[id]); return; }
+        if (timeLeft <= 0) { 
+            timeText.innerText = "EXPIRED"; 
+            clearInterval(activeIntervals[id]); 
+            return; 
+        }
         const hours = Math.floor(timeLeft / (1000 * 60 * 60));
         const mins = Math.floor((timeLeft / 1000 / 60) % 60);
         const secs = Math.floor((timeLeft / 1000) % 60);
@@ -106,25 +125,24 @@ window.openEditModal = async function(id) {
             document.getElementById('edit-content').value = data.content;
             document.getElementById('edit-target').value = data.targetCode || "ALL";
             
-            // --- CONDITIONAL VISIBILITY LOGIC ---
             const eventRow = document.getElementById('edit-event-row');
             const isEvent = data.priority?.toLowerCase().includes('event');
             
             if (isEvent) {
-                eventRow.style.display = 'block';
+                if(eventRow) eventRow.style.display = 'block';
                 document.getElementById('edit-event-date').value = data.event_date || "";
             } else {
-                eventRow.style.display = 'none';
-                document.getElementById('edit-event-date').value = ""; // Clear if not an event
+                if(eventRow) eventRow.style.display = 'none';
+                document.getElementById('edit-event-date').value = ""; 
             }
             
-            // Preview Attachment
             const preview = document.getElementById('edit-image-preview');
-            preview.innerHTML = data.attachmentUrl 
-                ? `<p style="font-size:0.8rem; color:#b3004b;"><i class="fas fa-paperclip"></i> Existing Attachment Attached</p>` 
-                : `<p style="font-size:0.75rem; color:#999;">No current attachment</p>`;
+            if(preview) {
+                preview.innerHTML = data.attachmentUrl 
+                    ? `<p style="font-size:0.8rem; color:#b3004b;"><i class="fas fa-paperclip"></i> Existing Attachment Attached</p>` 
+                    : `<p style="font-size:0.75rem; color:#999;">No current attachment</p>`;
+            }
 
-            // Expiry Handling
             if (data.expiresAt) {
                 const date = data.expiresAt.toDate();
                 const localISO = new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
@@ -147,7 +165,8 @@ window.saveEdit = async function() {
     const content = document.getElementById('edit-content').value;
     const expiryVal = document.getElementById('edit-expiry').value;
     const eventDate = document.getElementById('edit-event-date').value;
-    const newFile = document.getElementById('edit-file-input').files[0];
+    const fileInput = document.getElementById('edit-file-input');
+    const newFile = fileInput ? fileInput.files[0] : null;
     const updateBtn = document.querySelector('[onclick="saveEdit()"]');
 
     try {
@@ -157,7 +176,7 @@ window.saveEdit = async function() {
         let updateData = {
             title: title,
             content: content,
-            event_date: eventDate, // Updated field
+            event_date: eventDate, 
             updatedAt: serverTimestamp(),
             expiresAt: expiryVal ? Timestamp.fromDate(new Date(expiryVal)) : null
         };
@@ -172,14 +191,34 @@ window.saveEdit = async function() {
 
         await updateDoc(doc(db, "notices", id), updateData);
         document.getElementById('edit-modal').style.display = 'none';
-        alert("Notice updated!");
-    } catch (err) { alert("Update failed"); } 
-    finally {
+        alert("Notice updated successfully!");
+    } catch (err) { 
+        console.error("Update failed:", err);
+        alert("Update failed: " + err.message); 
+    } finally {
         updateBtn.disabled = false;
         updateBtn.innerHTML = `<i class="fas fa-check-circle"></i> Update Notice`;
     }
 };
 
+// 6. FULLY CORRECTED DELETE FUNCTION
+// This handles the real-time removal from Firebase
 window.confirmDelete = async function(id) {
-    if (confirm("Delete this broadcast?")) await deleteDoc(doc(db, "notices", id));
+    if (!confirm("Are you sure you want to permanently delete this notice? This cannot be undone.")) return;
+
+    try {
+        // Target the specific document in the 'notices' collection
+        const noticeRef = doc(db, "notices", id);
+        
+        // Execute the deletion
+        await deleteDoc(noticeRef);
+        
+        // Note: The onSnapshot listener will automatically remove the card from the UI
+        console.log(`Notice ${id} deleted successfully from Firestore.`);
+        alert("Notice deleted successfully!");
+        
+    } catch (error) {
+        console.error("Error during deletion:", error);
+        alert("Error deleting notice: " + error.message);
+    }
 };

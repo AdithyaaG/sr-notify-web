@@ -124,108 +124,130 @@
     </nav>
 
     <script type="module">
-        import { db } from "../../js/firebase-config.js"; 
-        import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { db } from "../../js/firebase-config.js"; 
+    import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        async function loadDepartments() {
-            const container = document.getElementById('deptListContainer');
-            container.innerHTML = `<p style="text-align:center; color:#999;">Fetching records...</p>`;
-            try {
-                const snap = await getDocs(collection(db, "departments"));
-                container.innerHTML = "";
-                if(snap.empty) {
-                    container.innerHTML = `<p style="text-align:center; color:#999;">No departments found.</p>`;
-                    return;
-                }
-                snap.forEach(docSnap => {
-                    const d = docSnap.data();
-                    const card = document.createElement('div');
-                    card.className = 'dept-card';
-                    
-                    const staffChips = d.staffs ? d.staffs.map(s => `<span class="staff-chip">${s}</span>`).join('') : '';
-                    
-                    card.innerHTML = `
-                        <div class="dept-header">
-                            <div onclick="window.location.href='admin_manage_staff.html?dept=${d.deptCode}'" style="cursor:pointer; flex-grow:1;">
-                                <strong style="display:block; font-size:1.1rem; color:var(--primary);">${d.deptName}</strong>
-                                <small style="color:#666;">Code: ${d.deptCode} • <span style="color:var(--edit);">View Batches <i class="fas fa-external-link-alt" style="font-size:0.7rem;"></i></span></small>
-                            </div>
-                            <div class="action-btns">
-                                <button class="edit-btn" title="Edit Department" onclick='window.openEditModal("${docSnap.id}", ${JSON.stringify(d).replace(/'/g, "&apos;")})'><i class="fas fa-edit"></i></button>
-                                <button class="delete-btn" title="Delete" onclick="window.deleteDept('${docSnap.id}')"><i class="fas fa-trash"></i></button>
-                            </div>
-                        </div>
-                        <div class="staff-list-preview" onclick="window.location.href='admin_manage_staff.html?dept=${d.deptCode}'" style="cursor:pointer;">
-                            ${staffChips}
-                        </div>
-                    `;
-                    container.appendChild(card);
-                });
-            } catch (err) { console.error("Load Error:", err); }
-        }
-
-        window.openCreateModal = () => {
-            document.getElementById('modalTitle').innerText = "Add Department";
-            document.getElementById('editDocId').value = "";
-            document.getElementById('deptName').value = "";
-            document.getElementById('deptCode').value = "";
-            document.getElementById('staffNames').value = "";
-            document.getElementById('staffEmails').value = "";
-            document.getElementById('deptModal').style.display = 'flex';
-        };
-
-        window.openEditModal = (id, data) => {
-            document.getElementById('modalTitle').innerText = "Edit Department";
-            document.getElementById('editDocId').value = id;
-            document.getElementById('deptName').value = data.deptName;
-            document.getElementById('deptCode').value = data.deptCode;
-            document.getElementById('staffNames').value = data.staffs ? data.staffs.join(', ') : "";
-            document.getElementById('staffEmails').value = data.staffEmails ? data.staffEmails.join(', ') : "";
-            document.getElementById('deptModal').style.display = 'flex';
-        };
-
-        window.closeModals = () => { document.getElementById('deptModal').style.display = 'none'; };
-
-        window.saveDept = async () => {
-            const name = document.getElementById('deptName').value.trim();
-            const code = document.getElementById('deptCode').value.trim();
-            const editId = document.getElementById('editDocId').value;
-            
-            const staffArr = document.getElementById('staffNames').value.split(',').map(s => s.trim()).filter(s => s !== "");
-            const emailArr = document.getElementById('staffEmails').value.split(',').map(s => s.trim().toLowerCase()).filter(s => s !== "");
-
-            if(!name || !code) return alert("Please fill Name and Code!");
-            
-            try {
-                const deptObj = {
-                    deptName: name,
-                    deptCode: code,
-                    staffs: staffArr,
-                    staffEmails: emailArr,
-                    updatedAt: serverTimestamp()
-                };
-
-                if (editId) {
-                    await updateDoc(doc(db, "departments", editId), deptObj);
-                } else {
-                    await setDoc(doc(db, "departments", code), { ...deptObj, createdAt: serverTimestamp() });
-                }
+    async function loadDepartments() {
+        const container = document.getElementById('deptListContainer');
+        container.innerHTML = `<p style="text-align:center; color:#999;">Fetching records...</p>`;
+        try {
+            const snap = await getDocs(collection(db, "departments"));
+            container.innerHTML = "";
+            if(snap.empty) {
+                container.innerHTML = `<p style="text-align:center; color:#999;">No departments found.</p>`;
+                return;
+            }
+            snap.forEach(docSnap => {
+                const d = docSnap.data();
+                const card = document.createElement('div');
+                card.className = 'dept-card';
                 
-                alert("Saved successfully!");
-                closeModals();
-                loadDepartments();
-            } catch (e) { alert("Error: " + e.message); }
-        };
+                const staffChips = d.staffs ? d.staffs.map(s => `<span class="staff-chip">${s}</span>`).join('') : '';
+                
+                card.innerHTML = `
+                    <div class="dept-header">
+                        <div onclick="window.location.href='admin_manage_staff.html?dept=${d.deptCode}'" style="cursor:pointer; flex-grow:1;">
+                            <strong style="display:block; font-size:1.1rem; color:var(--primary);">${d.deptName}</strong>
+                            <small style="color:#666;">Code: ${d.deptCode} • <span style="color:var(--edit);">View Batches <i class="fas fa-external-link-alt" style="font-size:0.7rem;"></i></span></small>
+                        </div>
+                        <div class="action-btns">
+                            <button class="edit-btn" title="Edit Department" onclick='window.openEditModal("${docSnap.id}", ${JSON.stringify(d).replace(/'/g, "&apos;")})'><i class="fas fa-edit"></i></button>
+                            <button class="delete-btn" title="Delete" onclick="window.deleteDept('${docSnap.id}')"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <div class="staff-list-preview" onclick="window.location.href='admin_manage_staff.html?dept=${d.deptCode}'" style="cursor:pointer;">
+                        ${staffChips}
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        } catch (err) { console.error("Load Error:", err); }
+    }
 
-        window.deleteDept = async (id) => {
-            if(!confirm("Delete this department? All staff links will be lost.")) return;
-            try {
-                await deleteDoc(doc(db, "departments", id));
-                loadDepartments();
-            } catch (e) { alert("Error: " + e.message); }
-        };
+    window.openCreateModal = () => {
+        document.getElementById('modalTitle').innerText = "Add Department";
+        document.getElementById('editDocId').value = "";
+        document.getElementById('deptName').value = "";
+        document.getElementById('deptCode').value = "";
+        document.getElementById('staffNames').value = "";
+        document.getElementById('staffEmails').value = "";
+        document.getElementById('deptModal').style.display = 'flex';
+    };
 
-        loadDepartments();
-    </script>
+    window.openEditModal = (id, data) => {
+        document.getElementById('modalTitle').innerText = "Edit Department";
+        document.getElementById('editDocId').value = id;
+        document.getElementById('deptName').value = data.deptName;
+        document.getElementById('deptCode').value = data.deptCode;
+        document.getElementById('staffNames').value = data.staffs ? data.staffs.join(', ') : "";
+        document.getElementById('staffEmails').value = data.staffEmails ? data.staffEmails.join(', ') : "";
+        document.getElementById('deptModal').style.display = 'flex';
+    };
+
+    window.closeModals = () => { document.getElementById('deptModal').style.display = 'none'; };
+
+    // --- UPDATED SAVE FUNCTION ---
+    window.saveDept = async () => {
+        const name = document.getElementById('deptName').value.trim();
+        const code = document.getElementById('deptCode').value.trim();
+        const editId = document.getElementById('editDocId').value;
+        
+        const staffArr = document.getElementById('staffNames').value.split(',').map(s => s.trim()).filter(s => s !== "");
+        const emailArr = document.getElementById('staffEmails').value.split(',').map(s => s.trim().toLowerCase()).filter(s => s !== "");
+
+        if(!name || !code) return alert("Please fill Name and Code!");
+        if(staffArr.length !== emailArr.length) return alert("Mismatch: Count of names must match count of emails!");
+        
+        try {
+            const deptObj = {
+                deptName: name,
+                deptCode: code,
+                staffs: staffArr,
+                staffEmails: emailArr,
+                updatedAt: serverTimestamp()
+            };
+
+            // 1. Save to 'departments' collection
+            if (editId) {
+                await updateDoc(doc(db, "departments", editId), deptObj);
+            } else {
+                await setDoc(doc(db, "departments", code), { ...deptObj, createdAt: serverTimestamp() });
+            }
+
+            // 2. Sync Staff Members to 'staff' collection
+            // We loop through the provided emails and create/update staff profiles
+            for (let i = 0; i < emailArr.length; i++) {
+                const staffEmail = emailArr[i];
+                const staffName = staffArr[i];
+
+                await setDoc(doc(db, "staff", staffEmail), {
+                    email: staffEmail,
+                    name: staffName,
+                    dept_name: name,
+                    dept_code: code,
+                    role: "staff", // Default role
+                    updatedAt: serverTimestamp()
+                }, { merge: true }); // 'merge: true' prevents overwriting existing data like passwords/batches
+            }
+            
+            alert("Department and Staff database synced successfully!");
+            closeModals();
+            loadDepartments();
+        } catch (e) { 
+            console.error(e);
+            alert("Error: " + e.message); 
+        }
+    };
+
+    window.deleteDept = async (id) => {
+        if(!confirm("Delete this department? Note: Staff records will remain in the staff database but the department link will be removed here.")) return;
+        try {
+            await deleteDoc(doc(db, "departments", id));
+            loadDepartments();
+        } catch (e) { alert("Error: " + e.message); }
+    };
+
+    loadDepartments();
+</script>
 </body>
 </html>

@@ -24,23 +24,28 @@ window.loginWithGoogle = async function() {
         const user = result.user;
         const userEmail = user.email.toLowerCase(); 
 
-        // Store basic info immediately
+        // --- GLOBAL STORAGE (For All Roles) ---
+        localStorage.clear(); // Clear old buggy data first
         localStorage.setItem("userPhoto", user.photoURL || ""); 
         localStorage.setItem("userName", user.displayName || "User");
         localStorage.setItem("userEmail", userEmail);
+        localStorage.setItem("uid", user.uid); // FIX: Added UID for "Staff UID" display
 
-        // --- STEP 1: CHECK FOR ADMIN ROLE ---
-        const adminRef = doc(db, "users", user.uid);
-        const adminDoc = await getDoc(adminRef);
+        // --- STEP 1: ADMIN ROLE ---
+        const adminRef = doc(db, "admin", "current_admin");
+        const adminSnap = await getDoc(adminRef);
 
-        if (adminDoc.exists() && adminDoc.data().role === "admin") {
-            localStorage.setItem("userRole", "admin");
-            window.location.href = `pages/admin/admin_home.html`;
-            return;
+        if (adminSnap.exists()) {
+            const adminData = adminSnap.data();
+            if (userEmail === adminData.email.toLowerCase()) {
+                localStorage.setItem("userRole", "admin");
+                localStorage.setItem("userDept", adminData.dept_code || "All");
+                window.location.href = `pages/admin/admin_home.html`;
+                return;
+            }
         }
 
-        // --- STEP 2: CHECK FOR STAFF ROLE (Using Array Search) ---
-        // This queries the 'departments' collection to see if the email exists in 'staffEmails' array
+        // --- STEP 2: STAFF ROLE ---
         const deptQuery = query(
             collection(db, "departments"), 
             where("staffEmails", "array-contains", userEmail)
@@ -52,17 +57,16 @@ window.loginWithGoogle = async function() {
             const deptData = deptSnap.docs[0].data();
             
             localStorage.setItem("userRole", "staff");
-            localStorage.setItem("userDept", deptData.deptCode); // e.g., "107"
+            // Use 'userDept' consistently for the profile handler
+            localStorage.setItem("userDept", deptData.deptCode); 
             localStorage.setItem("deptName", deptData.deptName);
-            localStorage.setItem("userName", user.displayName);
 
             window.location.href = "pages/staff/staff_home.html";
             return;
         }
 
-        // --- STEP 3: CHECK STUDENT ACCESS (Auto-Extraction) ---
+        // --- STEP 3: STUDENT ACCESS ---
         const emailPrefix = userEmail.split('@')[0];
-        // Checks if email starts with a number and ends with college domain
         const isStudentEmail = /^\d/.test(emailPrefix) && userEmail.endsWith("@srcas.ac.in");
 
         if (isStudentEmail) {
@@ -70,7 +74,6 @@ window.loginWithGoogle = async function() {
             const studentDoc = await getDoc(studentRef);
             
             const regNumStr = emailPrefix;
-            // Matches your logic: 23107068 -> deptCode 107
             const deptCode = regNumStr.substring(2, 5); 
 
             if (!studentDoc.exists()) {
@@ -78,7 +81,7 @@ window.loginWithGoogle = async function() {
                     uid: user.uid,
                     name: user.displayName,
                     email: userEmail,
-                    regNo: Number(regNumStr),
+                    regNo: regNumStr, // Consistent with database
                     deptCode: deptCode,
                     batchYear: Number(regNumStr.substring(0, 2)),
                     role: "student",
@@ -90,20 +93,18 @@ window.loginWithGoogle = async function() {
             }
 
             localStorage.setItem("userRole", "student");
-            localStorage.setItem("userReg", regNumStr);
+            localStorage.setItem("userReg", regNumStr); // Maps to 'disp-id' on student profile
             localStorage.setItem("userDept", deptCode);
             window.location.href = "pages/student/student_home.html";
             return;
         }
 
-        // If no roles match, sign out to prevent unauthorized persistence
-        alert("Unauthorized access. Your email is not registered in any Department staff list.");
+        alert("Unauthorized access. Email not found in Staff or Admin records.");
         await auth.signOut();
         window.location.reload();
 
     } catch (error) {
         console.error("Login Error:", error);
-        // Common cause: Firestore Rules missing 'list' permission for departments
         alert("Login Error: " + error.message);
     }
 };
