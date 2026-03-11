@@ -25,16 +25,18 @@
         .notice-card:active { transform: scale(0.98); }
         .card-header-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
         .card-title { font-weight: 800; color: #333; font-size: 1.1rem; flex: 1; padding-right: 10px; }
-        .card-timer { color: #d32f2f; font-size: 0.7rem; font-weight: bold; background: #fff5f5; padding: 4px 8px; border-radius: 6px; white-space: nowrap; }
         
-        /* Fixed Line Clamp Warning */
+        /* Fixed Timer Display */
+        .card-timer { 
+            color: #d32f2f; font-size: 0.7rem; font-weight: bold; 
+            background: #fff5f5; padding: 4px 8px; border-radius: 6px; 
+            white-space: nowrap; display: inline-flex; align-items: center; gap: 5px;
+        }
+        
         .card-excerpt { 
             font-size: 0.9rem; color: #555; line-height: 1.5; margin-bottom: 12px; 
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            line-clamp: 2; 
-            -webkit-box-orient: vertical; 
-            overflow: hidden; text-overflow: ellipsis; 
+            display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; 
+            -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; 
         }
         
         .card-footer-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: #999; border-top: 1px solid #f5f5f5; padding-top: 10px; }
@@ -49,26 +51,20 @@
         .popup-body { padding: 20px; overflow-y: auto; flex: 1; }
         .content-text { color: #444; line-height: 1.6; white-space: pre-wrap; font-size: 1rem; margin-bottom: 15px; }
 
-        /* Fixed Snap Scroll Warnings */
+        /* Media Slider */
         .slider-container { 
-            display: flex; 
-            overflow-x: auto; 
-            scroll-snap-type: x mandatory; 
-            -webkit-overflow-scrolling: touch;
-            gap: 10px; 
-            scroll-behavior: smooth; 
-            border-radius: 15px; 
-            padding-bottom: 5px; 
+            display: flex; overflow-x: auto; scroll-snap-type: x mandatory; 
+            -webkit-overflow-scrolling: touch; gap: 10px; scroll-behavior: smooth; 
+            border-radius: 15px; padding-bottom: 10px; 
         }
         .slider-container::-webkit-scrollbar { height: 4px; }
         .slider-container::-webkit-scrollbar-thumb { background: #d32f2f; border-radius: 10px; }
         
-        .slider-item { 
-            min-width: 100%; 
-            scroll-snap-align: center; 
-            position: relative; 
+        .slider-item { min-width: 100%; scroll-snap-align: center; position: relative; }
+        .slider-item img, .slider-item video { 
+            width: 100%; height: auto; max-height: 350px; object-fit: contain; 
+            background: #f0f0f0; border-radius: 15px; display: block; 
         }
-        .slider-item img, .slider-item video { width: 100%; height: 300px; object-fit: contain; background: #000; border-radius: 15px; display: block; }
 
         @keyframes popIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     </style>
@@ -143,7 +139,6 @@
 
         let noticesWithStatus = [];
 
-        // Loop through docs to check Read/Unread status
         for (const docSnap of snapshot.docs) {
             const data = docSnap.data();
             const id = docSnap.id;
@@ -152,7 +147,6 @@
             const expiryDate = data.expiresAt?.toDate ? data.expiresAt.toDate() : (data.expiresAt ? new Date(data.expiresAt) : null);
             if (expiryDate && expiryDate <= now) continue;
 
-            // --- READ/UNREAD CHECK ---
             let isRead = false;
             try {
                 const viewSnap = await getDoc(doc(db, "notices", id, "views", studentId));
@@ -162,9 +156,7 @@
             let isPinned = false;
             if (data.event_date) {
                 const eventDate = new Date(data.event_date);
-                if (eventDate <= twoDaysFromNow && eventDate >= new Date().setHours(0,0,0,0)) {
-                    isPinned = true;
-                }
+                if (eventDate <= twoDaysFromNow && eventDate >= new Date().setHours(0,0,0,0)) isPinned = true;
             }
 
             const postDate = data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date());
@@ -186,14 +178,14 @@
             if (currentNoticeDateString !== lastProcessedDateString) {
                 container.innerHTML += `
                     <div style="width: 100%; border-top: 2px solid #333; margin: 30px 0 15px; position: relative; clear: both;">
-                        <span style="position: absolute; top: -14px; left: 10px; background: #f0f2f5; padding: 0 12px; font-weight: 800; color: #333; font-size: 0.9rem; font-family: sans-serif;">
+                        <span style="position: absolute; top: -14px; left: 10px; background: #f0f2f5; padding: 0 12px; font-weight: 800; color: #333; font-size: 0.9rem;">
                             ${currentNoticeDateString}
                         </span>
                     </div>`;
                 lastProcessedDateString = currentNoticeDateString;
             }
 
-            container.innerHTML += item.html;
+            container.insertAdjacentHTML('beforeend', item.html);
             if (item.expiryDate) startCountdown(item.id, item.expiryDate);
         });
     });
@@ -204,20 +196,19 @@
         const postDate = data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : null);
         const timeSnap = formatWhatsAppTime(postDate);
 
-        // Visual Logic for Read vs Unread
         const cardBg = isRead ? "white" : "#f0f2f5"; 
-        const cardOpacity = isRead ? "1" : "0.5";
+        const cardOpacity = isRead ? "1" : "0.9";
         const unreadBadge = isRead ? '' : `<div style="position:absolute; top:10px; right:10px; width:8px; height:8px; background:${adminRed}; border-radius:50%;"></div>`;
 
         let attachmentIcon = "";
-        if (data.attachments && data.attachments.length > 0) {
+        if ((data.attachments && data.attachments.length > 0) || data.attachmentUrl) {
             attachmentIcon = `<i class="fas fa-images" style="margin-left:8px; color:${pinOrange};"></i>`;
         }
 
         return `
             <div class="notice-card" id="admin-card-${id}" onclick="showAdminPopup('${id}')" 
                  style="background:${cardBg}; opacity:${cardOpacity}; border-left-color: ${isPinned ? pinOrange : adminRed}; 
-                 box-shadow: ${isPinned ? '0 4px 15px rgba(255,152,0,0.2)' : '0 4px 12px rgba(0,0,0,0.08)'}; position:relative; transition: all 0.3s ease;">
+                 box-shadow: ${isPinned ? '0 4px 15px rgba(255,152,0,0.2)' : '0 4px 12px rgba(0,0,0,0.08)'};">
                 
                 ${unreadBadge}
                 ${isPinned ? `<div class="pinned-badge"><i class="fas fa-thumbtack"></i> UPCOMING EVENT</div>` : ''}
@@ -231,12 +222,12 @@
                 <div class="card-excerpt">${data.content}</div>
 
                 <div class="card-footer-row">
-                    <span><i class="fas fa-university"></i> SR-Notify Official<span style="color:#bbb; font-weight:normal; margin-left:5px;">• ${timeSnap}</span></span>
+                    <span><i class="fas fa-university"></i> SR-Notify Official<span style="color:#bbb; margin-left:5px;">• ${timeSnap}</span></span>
                     ${expiryDate ? `
                         <div id="timer-${id}" class="card-timer">
                             <i class="fas fa-hourglass-half"></i> <span id="time-text-${id}">...</span>
                         </div>
-                    ` : `<span class="priority-tag" style="background:${adminRed}; color:white; padding:2px 8px; border-radius:4px; font-size:0.65rem;">${data.priority?.toUpperCase() || 'OFFICIAL'}</span>`}
+                    ` : `<span class="priority-tag">${data.priority?.toUpperCase() || 'OFFICIAL'}</span>`}
                 </div>
             </div>`;
     }
@@ -244,15 +235,19 @@
     function startCountdown(id, expiryDate) {
         activeIntervals[id] = setInterval(() => {
             const timeLeft = expiryDate - new Date();
+            const el = document.getElementById(`time-text-${id}`);
+            
             if (timeLeft <= 0) {
-                document.getElementById(`admin-card-${id}`)?.remove();
+                const card = document.getElementById(`admin-card-${id}`);
+                if (card) { card.style.opacity = "0"; setTimeout(() => card.remove(), 500); }
                 clearInterval(activeIntervals[id]);
                 return;
             }
+            
+            const hours = Math.floor(timeLeft / (1000 * 60 * 60));
             const mins = Math.floor((timeLeft / 1000 / 60) % 60);
             const secs = Math.floor((timeLeft / 1000) % 60);
-            const hours = Math.floor(timeLeft / (1000 * 60 * 60));
-            const el = document.getElementById(`time-text-${id}`);
+            
             if (el) el.innerText = hours > 0 ? `${hours}h ${mins}m` : `${mins}m ${secs}s`;
         }, 1000);
     }
@@ -262,31 +257,25 @@
         if(!notice) return;
         
         recordView(id);
-
-        // Immediate UI feedback
         const card = document.getElementById(`admin-card-${id}`);
-        if (card) {
-            card.style.background = "white";
-            card.style.opacity = "1";
-            const badge = card.querySelector('div[style*="border-radius:50%"]');
-            if (badge) badge.remove();
-        }
+        if (card) { card.style.background = "white"; card.style.opacity = "1"; const b = card.querySelector('div[style*="border-radius:50%"]'); if(b) b.remove(); }
 
         const overlay = document.createElement('div');
         overlay.id = "notice-overlay";
         overlay.className = "popup-overlay";
+        
         const linkedContent = notice.content.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:#d32f2f; font-weight:bold; text-decoration:underline;">$1</a>');
 
-        let mediaHtml = "";
-        const items = notice.attachments || [];
-        if (items.length === 0 && notice.attachmentUrl) items.push({ url: notice.attachmentUrl, type: notice.attachmentType });
+        let items = Array.isArray(notice.attachments) ? notice.attachments : [];
+        if (items.length === 0 && notice.attachmentUrl) items.push({ url: notice.attachmentUrl, type: notice.attachmentType || 'image' });
 
+        let mediaHtml = "";
         if (items.length > 0) {
             mediaHtml = `<div style="margin-top:20px;"><div class="slider-container">
-                ${items.map((item, idx) => {
-                    if (item.type === 'image') return `<div class="slider-item"><a href="${item.url}" target="_blank"><img src="${item.url}"></a></div>`;
+                ${items.map(item => {
+                    if (item.type === 'image') return `<div class="slider-item"><a href="${item.url}" target="_blank"><img src="${item.url}" onerror="this.src='https://via.placeholder.com/400x300?text=Image+Error'"></a></div>`;
                     if (item.type === 'video') return `<div class="slider-item"><video controls><source src="${item.url}"></video></div>`;
-                    return `<div class="slider-item"><a href="${item.url}" target="_blank" class="doc-link"><i class="fas fa-file-pdf"></i> View Document</a></div>`;
+                    return `<div class="slider-item"><a href="${item.url}" target="_blank" style="display:block; padding:40px; background:#f9f9f9; text-align:center; border-radius:15px; color:#d32f2f;"><i class="fas fa-file-pdf"></i> View Attachment</a></div>`;
                 }).join('')}
             </div></div>`;
         }

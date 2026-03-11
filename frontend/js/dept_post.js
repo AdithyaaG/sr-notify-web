@@ -32,10 +32,9 @@ async function uploadToCloudinary(file) {
 
 // 2. Main Publish Function
 window.publishDeptNotice = async function() {
-    // Check if user is Staff (Security Trick)
     const userRole = localStorage.getItem("userRole");
     if (userRole !== "staff" && userRole !== "admin") {
-        alert("Unauthorized! Only staff can post department-wide notices.");
+        alert("Unauthorized!");
         return;
     }
 
@@ -43,8 +42,10 @@ window.publishDeptNotice = async function() {
     const content = document.getElementById('noticeContent').value.trim();
     const priority = document.getElementById('noticePriority').value;
     const eventDate = document.getElementById('eventDate').value; 
+    const expiryInput = document.getElementById('expiryDate').value; // Get Expiry
     
-    const fileInput = document.getElementById('file-input');
+    // FIXED ID HERE: matched to 'dept-file-input' in your HTML
+    const fileInput = document.getElementById('dept-file-input');
     const files = fileInput ? Array.from(fileInput.files) : [];
     
     const user = auth.currentUser;
@@ -64,7 +65,6 @@ window.publishDeptNotice = async function() {
         postBtn.innerText = "UPLOADING...";
     }
 
-    // --- MULTI-UPLOAD LOOP ---
     let attachments = [];
     if (files.length > 0) {
         for (let i = 0; i < files.length; i++) {
@@ -74,8 +74,6 @@ window.publishDeptNotice = async function() {
         }
     }
 
-    // --- THE TRICK: IDENTITY SWITCH ---
-    // Grab the staff's specific department code (e.g., "107")
     const finalTargetCode = localStorage.getItem("userDept") || ""; 
     const authorName = localStorage.getItem("userName") || "Staff Member";
     const deptName = localStorage.getItem("deptName") || "Department";
@@ -88,25 +86,23 @@ window.publishDeptNotice = async function() {
             content: content,
             priority: priority,
             event_date: eventDate || null, 
-            authorName: authorName,          // Real Staff Name
-            authorEmail: user.email,         // Real Staff Email
-            authorRole: "staff",             // Switched from 'department' to 'staff' for accountability
-            targetCode: finalTargetCode,     // The Dept Code (e.g. 107) - This is the key!
-            targetType: "department_wide",   // Tag to identify this isn't a single-class notice
-            deptName: deptName,              // Visual label for students
-            
+            authorName: authorName,
+            authorEmail: user.email,
+            authorRole: "staff",
+            targetCode: finalTargetCode,
+            targetType: "department_wide",
+            deptName: deptName,
             attachments: attachments, 
             createdAt: serverTimestamp(),
-            // Set a default expiry of 30 days if not provided
-            expiresAt: null 
+            // Convert expiry string to Date object for Firestore
+            expiresAt: expiryInput ? new Date(expiryInput) : null 
         });
 
-        alert(`Notice successfully posted to all students in ${deptName} (${finalTargetCode})!`);
-        // Redirect back to staff home
+        alert("Notice successfully posted!");
         window.location.href = "staff_home.html"; 
     } catch (error) {
         console.error("Firestore Error:", error);
-        alert("Failed to save notice: " + error.message);
+        alert("Failed: " + error.message);
         if (postBtn) {
             postBtn.disabled = false;
             postBtn.innerText = "POST";

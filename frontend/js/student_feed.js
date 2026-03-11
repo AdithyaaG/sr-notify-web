@@ -201,16 +201,22 @@ async function startFeed() {
 }
 
 // --- POPUP LOGIC ---
+// --- POPUP LOGIC ---
+// --- POPUP LOGIC ---
 window.showNoticePopup = async function(id) {
     const docSnap = await getDoc(doc(db, "notices", id));
     if (!docSnap.exists()) return;
     const notice = docSnap.data();
 
-    // Record View
+    // Record View in Firestore
     try {
-        await setDoc(doc(db, "notices", id, "views", rawId), { viewerName: studentName, viewedAt: serverTimestamp(), studentId: rawId }, { merge: true });
+        await setDoc(doc(db, "notices", id, "views", rawId), { 
+            viewerName: studentName, 
+            viewedAt: serverTimestamp(), 
+            studentId: rawId 
+        }, { merge: true });
         
-        // Immediate UI Update: Change card color back to white once clicked
+        // Immediate UI Update: Change card style once clicked
         const card = document.getElementById(`notice-card-${id}`);
         if (card) {
             card.style.background = "white";
@@ -218,39 +224,78 @@ window.showNoticePopup = async function(id) {
             const badge = card.querySelector('div[style*="border-radius:50%"]');
             if (badge) badge.remove();
         }
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error("Error recording view:", e); }
 
+    // Create Popup Overlay
     const overlay = document.createElement('div');
     overlay.id = "notice-overlay";
-    overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); display:flex; align-items:center; justify-content:center; z-index:10000; padding:20px; backdrop-filter: blur(8px);";
+    overlay.style = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; align-items:center; justify-content:center; z-index:10000; padding:15px; backdrop-filter: blur(10px);";
 
+    // Format content with clickable links
     const linkedContent = notice.content.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:#1a237e; font-weight:bold; text-decoration:underline;">$1</a>');
     
+    // --- CORRECTED MEDIA HANDLING ---
     let mediaHtml = "";
-    const items = notice.attachments || [];
-    if (items.length === 0 && notice.attachmentUrl) items.push({ url: notice.attachmentUrl, type: notice.attachmentType });
+    let items = [];
+
+    // 1. Check for modern attachments array
+    if (Array.isArray(notice.attachments) && notice.attachments.length > 0) {
+        items = notice.attachments;
+    } 
+    // 2. Check for legacy single attachment URL
+    else if (notice.attachmentUrl) {
+        items.push({ 
+            url: notice.attachmentUrl, 
+            type: notice.attachmentType || 'image' // Default to image if type is missing
+        });
+    }
 
     if (items.length > 0) {
-        mediaHtml = `<div style="margin-top:20px; display:flex; overflow-x:auto; gap:10px;">
+        mediaHtml = `<div style="margin-top:20px; display:flex; flex-direction:column; gap:15px;">
             ${items.map(item => {
-                if (item.type === 'image') return `<img src="${item.url}" style="width:100%; border-radius:15px; max-height:300px; object-fit:cover;">`;
-                if (item.type === 'video') return `<video controls style="width:100%; border-radius:15px;"><source src="${item.url}"></video>`;
-                return `<a href="${item.url}" target="_blank" style="padding:20px; background:#f0f2f5; border-radius:15px; text-decoration:none; color:#1a237e;"><i class="fas fa-file-pdf"></i> View Document</a>`;
+                const url = item.url || item; // Handle if the array contains just strings
+                const type = item.type || (url.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? 'image' : 'file');
+
+                if (type === 'image') {
+                    return `<div style="width:100%; border-radius:15px; overflow:hidden; border:1px solid #eee; background:#f9f9f9;">
+                                <img src="${url}" style="width:100%; display:block; object-fit:contain; max-height:400px;" 
+                                     onclick="window.open('${url}', '_blank')" alt="Attachment">
+                            </div>`;
+                }
+                if (type === 'video') {
+                    return `<video controls style="width:100%; border-radius:15px; max-height:400px;"><source src="${url}"></video>`;
+                }
+                // Default for PDF or other documents
+                return `<a href="${url}" target="_blank" style="display:flex; align-items:center; gap:10px; padding:15px; background:#f0f2f5; border-radius:12px; text-decoration:none; color:#1a237e; border:1px solid #ddd;">
+                            <i class="fas fa-file-alt" style="font-size:1.2rem;"></i> 
+                            <span style="font-weight:600;">View Attached Document</span>
+                        </a>`;
             }).join('')}
         </div>`;
     }
 
     overlay.innerHTML = `
-        <div style="background:white; width:100%; max-width:500px; border-radius:25px; overflow:hidden; position:relative;">
-            <div style="padding:20px; border-bottom:1px solid #eee; display:flex; justify-content:space-between;">
-                <h2 style="margin:0; font-size:1.1rem;">${notice.title}</h2>
-                <button onclick="document.getElementById('notice-overlay').remove()" style="border:none; background:#eee; width:30px; height:30px; border-radius:50%; cursor:pointer;">&times;</button>
+        <div style="background:white; width:100%; max-width:450px; border-radius:28px; overflow:hidden; position:relative; box-shadow:0 20px 50px rgba(0,0,0,0.3); animation: slideUp 0.3s ease;">
+            <div style="padding:20px; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center;">
+                <h2 style="margin:0; font-size:1.1rem; color:#1a237e; font-weight:800; max-width:80%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                    ${notice.title}
+                </h2>
+                <button onclick="document.getElementById('notice-overlay').remove()" style="border:none; background:#f0f0f0; width:35px; height:35px; border-radius:50%; cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center;">&times;</button>
             </div>
-            <div style="padding:20px; max-height:70vh; overflow-y:auto;">
-                <p style="white-space:pre-wrap; color:#444;">${linkedContent}</p>
+            <div style="padding:20px; max-height:75vh; overflow-y:auto; scrollbar-width: thin;">
+                <p style="white-space:pre-wrap; color:#333; line-height:1.6; font-size:1rem; margin-bottom:10px;">${linkedContent}</p>
                 ${mediaHtml}
+                <div style="margin-top:20px; font-size:0.75rem; color:#888; border-top:1px solid #f9f9f9; padding-top:10px;">
+                    Posted by ${notice.authorName} • ${notice.authorRole.toUpperCase()}
+                </div>
             </div>
-        </div>`;
+        </div>
+        <style>
+            @keyframes slideUp {
+                from { transform: translateY(20px); opacity: 0; }
+                to { transform: translateY(0); opacity: 1; }
+            }
+        </style>`;
     document.body.appendChild(overlay);
 };
 
